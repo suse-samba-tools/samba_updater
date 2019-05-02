@@ -16,9 +16,18 @@ from glob import glob
 from configparser import ConfigParser
 from urllib import request
 
+def fetch_tags(package, versions):
+    out, _ = Popen([which('git'), 'ls-remote', '--tags', 'https://git.samba.org/samba.git'], stdout=PIPE, stderr=PIPE).communicate()
+    tags = {}
+    for version in versions:
+        res = re.findall('(\w{40})\s+refs/tags/%s-%s\^\{\}\n' % (package, version), out.decode())
+        if len(res) > 0:
+            tags[version] = res[0]
+    return tags
+
 def fetch_package(user, api_url, project, package, output_dir):
     # Choose a random package name (to avoid name collisions)
-    rpackage = '%s%s' % (package, next(get_candidate_names()))
+    rpackage = '%s-%s' % (package, next(get_candidate_names()))
     nproject = 'home:%s:branches:%s' % (user, project)
     # Branch the package
     out, err = Popen([which('osc'), '-A', api_url, 'branch', project, package, nproject, rpackage], stdout=PIPE, stderr=PIPE).communicate()
@@ -43,11 +52,26 @@ def fetch_package(user, api_url, project, package, output_dir):
     # Check the package version
     spec_file = list(set(glob(os.path.join(output_dir, '*.spec'))) - set(glob(os.path.join(output_dir, '*-man.spec'))))[-1]
     spec = Spec.from_file(spec_file)
+    version = spec.version
+    print('Current package version is %s' % version)
 
+    # Fetch upstream versions
     samba_url = 'https://www.samba.org/ftp/pub/%s' % package
     resp = request.urlopen(samba_url)
     page_data = resp.read()
     versions = set([f.decode() for f in re.findall(b'<a href="%s-([\.\-\w]+)\.tar\.[^"]+">' % package.encode(), page_data)])
+
+    # Check for newer package version
+    vers_vector = [int(v) for v in version.split('.')]
+    new_vers = {}
+    vers_mo = re.compile('%d\.%d\.(\d+)' % (vers_vector[0], vers_vector[1]))
+    for upstream_vers in versions:
+        m = vers_mo.match(upstream_vers)
+        if m and int(m.group(1)) > vers_vector[-1]:
+            new_vers[upstream_vers] = int(m.group(1))
+
+    # Generate a changelog entry
+    git_tags = fetch_tags(package, new_vers.keys())
 
     # Delete the package unless we have generated an update
     Popen([which('osc'), '-A', api_url, 'rdelete', home_proj, home_pkg, '-m', 'Deleting package %s as part of automated update' % home_pkg]).wait()
