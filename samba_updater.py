@@ -88,7 +88,29 @@ def fetch_package(user, api_url, project, package, output_dir):
     os.chdir(clone_dir)
     for vers in new_vers.keys():
         out, _ = Popen([which('git'), 'log', '-1', git_tags[vers]], stdout=PIPE).communicate()
-        new_vers[vers]['log'] = out.strip()
+        log = ''
+        for line in out.decode().split('\n'):
+            if not line.strip():
+                continue
+            elif re.match('commit \w{40}', line):
+                continue
+            elif re.match('Author:\s+.*', line):
+                continue
+            elif re.match('Date:\s+.*', line):
+                continue
+            elif re.match('\s+signed\-off\-by:\s+.*', line.lower()):
+                continue
+            elif re.match('\s+reviewed\-by:\s+.*', line.lower()):
+                continue
+            elif re.match('\s+autobuild\-user\(\w+\):\s+.*', line.lower()):
+                continue
+            elif re.match('\s+autobuild\-date\(\w+\):\s+.*', line.lower()):
+                continue
+            line = re.sub(r'\(bug\s*#\s*(\d+)\)', r'(bso#\1)', line)
+            line = line.replace('    * ', '  + ').replace('      ', '    ')
+            line = line.replace('%s: version %s' % (package, vers), '- Update to %s' % vers)
+            log += '%s\n' % line
+        new_vers[vers]['log'] = log.strip()
     os.chdir(cwd)
 
     # Delete the package unless we have generated an update
