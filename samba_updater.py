@@ -4,7 +4,14 @@ import argparse
 from shutil import which, rmtree
 import re, os
 from tempfile import mkdtemp, _get_candidate_names as get_candidate_names
-from pyrpm.spec import Spec
+def install_package(package_name):
+    print('%s needs to be installed:' % package_name)
+    Popen(['sudo %s in -y %s' % (which('zypper'), package_name)], shell=True).wait()
+try:
+    from pyrpm.spec import Spec
+except ImportError:
+    install_package('python3-python-rpm-spec')
+    from pyrpm.spec import Spec
 from glob import glob
 from configparser import ConfigParser
 
