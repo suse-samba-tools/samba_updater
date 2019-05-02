@@ -14,6 +14,7 @@ except ImportError:
     from pyrpm.spec import Spec
 from glob import glob
 from configparser import ConfigParser
+from urllib import request
 
 def fetch_package(user, api_url, project, package, output_dir):
     # Choose a random package name (to avoid name collisions)
@@ -42,6 +43,11 @@ def fetch_package(user, api_url, project, package, output_dir):
     # Check the package version
     spec_file = list(set(glob(os.path.join(output_dir, '*.spec'))) - set(glob(os.path.join(output_dir, '*-man.spec'))))[-1]
     spec = Spec.from_file(spec_file)
+
+    samba_url = 'https://www.samba.org/ftp/pub/%s' % package
+    resp = request.urlopen(samba_url)
+    page_data = resp.read()
+    versions = set([f.decode() for f in re.findall(b'<a href="%s-([\.\-\w]+)\.tar\.[^"]+">' % package.encode(), page_data)])
 
     # Delete the package unless we have generated an update
     Popen([which('osc'), '-A', api_url, 'rdelete', home_proj, home_pkg, '-m', 'Deleting package %s as part of automated update' % home_pkg]).wait()
