@@ -58,16 +58,17 @@ def fetch_package(user, api_url, project, package, output_dir):
     # Fetch upstream versions
     samba_url = 'https://www.samba.org/ftp/pub/%s' % package
     resp = request.urlopen(samba_url)
-    page_data = resp.read()
-    versions = set([f.decode() for f in re.findall(b'<a href="%s-([\.\-\w]+)\.tar\.[^"]+">' % package.encode(), page_data)])
+    page_data = resp.read().decode()
+    versions = set(re.findall('<a href="%s-([\.\-\w]+)\.tar\.[^"]+">' % package, page_data))
+    vv = [int(v) for v in version.split('.')]
+    date = re.findall('href="%s\-%d\.%d\.%d\.tar\.gz"\>%s\-%d\.%d\.%d\.tar\.gz\</a\>\</td\>\<td align="right">(\d{4}\-\d{2}\-\d{2})' % (package, vv[0], vv[1], vv[2], package, vv[0], vv[1], vv[2]), page_data)[-1]
 
     # Check for newer package version
-    vers_vector = [int(v) for v in version.split('.')]
     new_vers = {}
-    vers_mo = re.compile('%d\.%d\.(\d+)' % (vers_vector[0], vers_vector[1]))
+    vers_mo = re.compile('%d\.%d\.(\d+)' % (vv[0], vv[1]))
     for upstream_vers in versions:
         m = vers_mo.match(upstream_vers)
-        if m and int(m.group(1)) > vers_vector[-1]:
+        if m and int(m.group(1)) > vv[-1]:
             new_vers[upstream_vers] = int(m.group(1))
 
     # Generate a changelog entry
