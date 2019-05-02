@@ -3,7 +3,7 @@ from subprocess import Popen, PIPE
 import argparse
 from shutil import which, rmtree
 import re, os
-from tempfile import mkdtemp, _get_candidate_names as get_candidate_names
+from tempfile import mkdtemp, _get_candidate_names as get_candidate_names, NamedTemporaryFile
 def install_package(package_name):
     print('%s needs to be installed:' % package_name)
     Popen(['sudo %s in -y %s' % (which('zypper'), package_name)], shell=True).wait()
@@ -15,6 +15,7 @@ except ImportError:
 from glob import glob
 from configparser import ConfigParser
 from urllib import request
+from datetime import datetime
 
 samba_git_url = 'https://gitlab.com/samba-team/samba.git'
 
@@ -112,6 +113,19 @@ def fetch_package(user, api_url, project, package, output_dir):
             log += '%s\n' % line
         new_vers[vers]['log'] = log.strip()
     os.chdir(cwd)
+    sorted_versions = sorted(new_vers.keys(), key=lambda k: new_vers[k]['vers'], reverse=True)
+    latest_version = sorted_versions[0]
+    changelog_file = None
+    with NamedTemporaryFile('w', dir=output_dir, delete=False, suffix='.changes') as changelog:
+        now = datetime.now()
+        changelog.write('-------------------------------------------------------------------\n')
+        changelog.write('%s - %s\n\n' % (now, user))
+        for vers in sorted_versions:
+            changelog.write(new_vers[vers]['log'])
+            changelog.write('\n')
+        changelog.write('# Edit this changelog, then save and exit to submit\n')
+        changelog_file = changelog.name
+    Popen([which('vim'), changelog_file]).wait()
 
     # Delete the package unless we have generated an update
     Popen([which('osc'), '-A', api_url, 'rdelete', home_proj, home_pkg, '-m', 'Deleting package %s as part of automated update' % home_pkg]).wait()
