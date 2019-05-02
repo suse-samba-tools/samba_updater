@@ -16,8 +16,11 @@ from glob import glob
 from configparser import ConfigParser
 from urllib import request
 
+samba_git_url = 'https://gitlab.com/samba-team/samba.git'
+
 def fetch_tags(package, versions):
-    out, _ = Popen([which('git'), 'ls-remote', '--tags', 'https://git.samba.org/samba.git'], stdout=PIPE, stderr=PIPE).communicate()
+    global samba_git_url
+    out, _ = Popen([which('git'), 'ls-remote', '--tags', samba_git_url], stdout=PIPE, stderr=PIPE).communicate()
     tags = {}
     for version in versions:
         res = re.findall('(\w{40})\s+refs/tags/%s-%s\^\{\}\n' % (package, version), out.decode())
@@ -26,6 +29,7 @@ def fetch_tags(package, versions):
     return tags
 
 def fetch_package(user, api_url, project, package, output_dir):
+    global samba_git_url
     # Choose a random package name (to avoid name collisions)
     rpackage = '%s-%s' % (package, next(get_candidate_names()))
     nproject = 'home:%s:branches:%s' % (user, project)
@@ -40,17 +44,18 @@ def fetch_package(user, api_url, project, package, output_dir):
 
     # Checkout the package in the current directory
     if not output_dir:
-        output_dir = mkdtemp(prefix=home_pkg)
+        output_dir = mkdtemp()
     else:
-        output_dir = os.path.abspath(os.path.join(output_dir, home_pkg))
-    if not os.path.exists(output_dir):
-        _, err = Popen([which('osc'), '-A', api_url, 'co', home_proj, home_pkg, '-o', output_dir], stdout=PIPE, stderr=PIPE).communicate()
+        output_dir = os.path.abspath(output_dir)
+    proj_dir = os.path.join(output_dir, home_pkg)
+    if not os.path.exists(proj_dir):
+        _, err = Popen([which('osc'), '-A', api_url, 'co', home_proj, home_pkg, '-o', proj_dir], stdout=PIPE, stderr=PIPE).communicate()
         if err:
             raise Exception(err.decode())
-    print('Checked out %s/%s at %s' % (home_proj, home_pkg, output_dir))
+    print('Checked out %s/%s at %s' % (home_proj, home_pkg, proj_dir))
 
     # Check the package version
-    spec_file = list(set(glob(os.path.join(output_dir, '*.spec'))) - set(glob(os.path.join(output_dir, '*-man.spec'))))[-1]
+    spec_file = list(set(glob(os.path.join(proj_dir, '*.spec'))) - set(glob(os.path.join(proj_dir, '*-man.spec'))))[-1]
     spec = Spec.from_file(spec_file)
     version = spec.version
 
@@ -70,16 +75,29 @@ def fetch_package(user, api_url, project, package, output_dir):
     for upstream_vers in versions:
         m = vers_mo.match(upstream_vers)
         if m and int(m.group(1)) > vv[-1]:
-            new_vers[upstream_vers] = int(m.group(1))
+            new_vers[upstream_vers] = {'vers': int(m.group(1))}
 
     # Generate a changelog entry
     git_tags = fetch_tags(package, new_vers.keys())
+    rclone = 'samba-%s' % next(get_candidate_names())
+    clone_dir = os.path.join(output_dir, rclone)
+    print('Shallow cloning samba since %s' % date)
+    Popen([which('git'), 'clone', '--shallow-since=%s' % date, samba_git_url, clone_dir], stdout=PIPE).wait()
+    print('Reading changelog from git history')
+    cwd = os.getcwd()
+    os.chdir(clone_dir)
+    for vers in new_vers.keys():
+        out, _ = Popen([which('git'), 'log', '-1', git_tags[vers]], stdout=PIPE).communicate()
+        new_vers[vers]['log'] = out.strip()
+    os.chdir(cwd)
 
     # Delete the package unless we have generated an update
     Popen([which('osc'), '-A', api_url, 'rdelete', home_proj, home_pkg, '-m', 'Deleting package %s as part of automated update' % home_pkg]).wait()
     print('Deleted branch target %s/%s' % (home_proj, home_pkg))
-    rmtree(output_dir)
-    print('Deleted output directory %s' % output_dir)
+    rmtree(proj_dir)
+    print('Deleted project directory %s' % proj_dir)
+    rmtree(clone_dir)
+    print('Deleted samba shallow clone %s' % clone_dir)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run against obs samba package to update to latest version. This will branch the target package into your home project, then check it out on the local machine.')
