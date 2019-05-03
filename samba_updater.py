@@ -31,14 +31,15 @@ def fetch_tags(package, versions):
 
 def cleanup(api_url, home_proj, home_pkg, proj_dir, clone_dir, updated=False):
     # Delete the package unless we have generated an update
-    if not updated:
+    if not updated and home_proj and home_pkg:
         ret = Popen([which('osc'), '-A', api_url, 'rdelete', home_proj, home_pkg, '-m', 'Deleting package %s as part of automated update' % home_pkg]).wait()
         if ret == 0:
             print('Deleted branch target %s/%s' % (home_proj, home_pkg))
         else:
             print('Failed to delete branch target %s/%s' % (home_proj, home_pkg))
-    rmtree(proj_dir)
-    print('Deleted project directory %s' % proj_dir)
+    if proj_dir:
+        rmtree(proj_dir)
+        print('Deleted project directory %s' % proj_dir)
     rmtree(clone_dir)
     print('Deleted samba shallow clone %s' % clone_dir)
 
@@ -195,6 +196,24 @@ def fetch_package(user, email, api_url, project, package, output_dir):
             data = re.sub(r'([Vv]ersion:\s+)%s' % version, r'\g<1>%s' % latest_version, data)
             w.write(data)
     print('Updated version in the spec file')
+
+    # Run a test build
+    os.chdir(proj_dir)
+    p = Popen([which('osc'), 'build', '-j8', '--ccache', '--local-package', '--trust-all-projects', '--clean', spec_file], stdout=PIPE, stderr=PIPE)
+    out, _ = p.communicate()
+    if p.returncode != 0:
+        print('Build failed. Fixup the package sources then submit manually.')
+        if out:
+            data = out.decode().split('\n')
+            if len(data) > 10:
+                for line in data[-10:]:
+                    print(line)
+            else:
+                print(out.decode())
+        print('The project sources are found in %s.' % proj_dir)
+        cleanup(api_url, None, None, None, clone_dir)
+        return
+    os.chdir(cwd)
 
     cleanup(api_url, home_proj, home_pkg, proj_dir, clone_dir)
 
