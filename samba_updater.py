@@ -117,9 +117,9 @@ def fetch_package(user, api_url, project, package, output_dir):
     latest_version = sorted_versions[0]
     changelog_file = None
     with NamedTemporaryFile('w', dir=output_dir, delete=False, suffix='.changes') as changelog:
-        now = datetime.now()
+        now = datetime.utcnow()
         changelog.write('-------------------------------------------------------------------\n')
-        changelog.write('%s - %s\n\n' % (now, user))
+        changelog.write('%s - %s\n\n' % (now.strftime('%a %b %d %X UTC %Y'), user))
         for vers in sorted_versions:
             changelog.write(new_vers[vers]['log'])
             changelog.write('\n')
