@@ -184,6 +184,15 @@ def fetch_package(user, api_url, project, package, output_dir):
     os.remove(os.path.join(output_dir, asc))
     os.chdir(cwd)
 
+    # Update the spec file
+    spec_files = glob(os.path.join(proj_dir, '*.spec'))
+    for specfile in spec_files:
+        data = open(specfile, 'r').read()
+        with open(specfile, 'w') as w:
+            data = re.sub(r'([Vv]ersion:\s+)%s' % version, r'\g<1>%s' % latest_version, data)
+            w.write(data)
+    print('Updated version in the spec file')
+
     cleanup(api_url, home_proj, home_pkg, proj_dir, clone_dir)
 
 if __name__ == "__main__":
