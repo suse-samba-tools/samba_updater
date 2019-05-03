@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 from subprocess import Popen, PIPE
 import argparse
-from shutil import which, rmtree
+from shutil import which, rmtree, copyfile
 import re, os
 from tempfile import mkdtemp, _get_candidate_names as get_candidate_names, NamedTemporaryFile
 def install_package(package_name):
@@ -133,6 +133,26 @@ def fetch_package(user, api_url, project, package, output_dir):
         with open(changelog, 'w') as w:
             w.write(changes)
             w.write(existing)
+    os.remove(changelog_file)
+
+    # Download the new package sources
+    tar = '%s-%s.tar.gz' % (package, latest_version)
+    asc = '%s-%s.tar.asc' % (package, latest_version)
+    tar_remote = '%s/%s' % (samba_url, tar)
+    asc_remote = '%s/%s' % (samba_url, asc)
+    with open(os.path.join(proj_dir, tar), 'wb') as w:
+        resp = request.urlopen(tar_remote)
+        w.write(resp.read())
+    with open(os.path.join(proj_dir, asc), 'wb') as w:
+        resp = request.urlopen(asc_remote)
+        w.write(resp.read())
+    os.chdir(proj_dir)
+    Popen([which('osc'), 'add', tar], stdout=PIPE).wait()
+    Popen([which('osc'), 'rm', '%s-%s.tar.gz' % (package, version)], stdout=PIPE).wait()
+    Popen([which('osc'), 'add', asc], stdout=PIPE).wait()
+    Popen([which('osc'), 'rm', '%s-%s.tar.asc' % (package, version)], stdout=PIPE).wait()
+    os.chdir(cwd)
+    print('Downloaded package sources')
 
     # Delete the package unless we have generated an update
     ret = Popen([which('osc'), '-A', api_url, 'rdelete', home_proj, home_pkg, '-m', 'Deleting package %s as part of automated update' % home_pkg]).wait()
