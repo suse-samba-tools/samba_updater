@@ -128,8 +128,9 @@ def fetch_package(user, api_url, project, package, output_dir):
     Popen([which('vim'), changelog_file]).wait()
 
     # Delete the package unless we have generated an update
-    Popen([which('osc'), '-A', api_url, 'rdelete', home_proj, home_pkg, '-m', 'Deleting package %s as part of automated update' % home_pkg]).wait()
-    print('Deleted branch target %s/%s' % (home_proj, home_pkg))
+    ret = Popen([which('osc'), '-A', api_url, 'rdelete', home_proj, home_pkg, '-m', 'Deleting package %s as part of automated update' % home_pkg]).wait()
+    if ret == 0:
+        print('Deleted branch target %s/%s' % (home_proj, home_pkg))
     rmtree(proj_dir)
     print('Deleted project directory %s' % proj_dir)
     rmtree(clone_dir)
