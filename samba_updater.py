@@ -167,6 +167,9 @@ def fetch_package(user, email, api_url, project, package, output_dir):
     os.chdir(cwd)
     print('Downloaded package sources')
 
+    # Make sure we have the key to verify sources
+    Popen([which('gpg'), '--keyserver', 'keyserver.ubuntu.com', '--recv-keys', '4793916113084025'], stdout=PIPE, stderr=PIPE).wait()
+
     # Verify the sources
     copyfile(os.path.join(proj_dir, tar), os.path.join(output_dir, tar))
     copyfile(os.path.join(proj_dir, asc), os.path.join(output_dir, asc))
