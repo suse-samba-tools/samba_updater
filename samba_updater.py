@@ -42,7 +42,7 @@ def cleanup(api_url, home_proj, home_pkg, proj_dir, clone_dir, updated=False):
     rmtree(clone_dir)
     print('Deleted samba shallow clone %s' % clone_dir)
 
-def fetch_package(user, api_url, project, package, output_dir):
+def fetch_package(user, email, api_url, project, package, output_dir):
     global samba_git_url
     # Choose a random package name (to avoid name collisions)
     rpackage = '%s-%s' % (package, next(get_candidate_names()))
@@ -132,7 +132,7 @@ def fetch_package(user, api_url, project, package, output_dir):
     with NamedTemporaryFile('w', dir=output_dir, delete=False, suffix='.changes') as changelog:
         now = datetime.utcnow()
         changelog.write('-------------------------------------------------------------------\n')
-        changelog.write('%s - %s\n\n' % (now.strftime('%a %b %d %X UTC %Y'), user))
+        changelog.write('%s - %s\n\n' % (now.strftime('%a %b %d %X UTC %Y'), email if email else user))
         for vers in sorted_versions:
             changelog.write(new_vers[vers]['log'])
             changelog.write('\n')
@@ -222,8 +222,13 @@ if __name__ == "__main__":
     if not user:
         # Force user to input creds
         Popen([which('osc'), '-A', args.apiurl, 'whois']).wait()
-        # Read the whois output for this user
-        out, _ = Popen([which('osc'), '-A', args.apiurl, 'whois'], stdout=PIPE, stderr=PIPE).communicate()
-        user = re.match(b'(\w+): .*', out).group(1).decode()
+    # Read the whois output for this user
+    out, _ = Popen([which('osc'), '-A', args.apiurl, 'whois'], stdout=PIPE, stderr=PIPE).communicate()
+    user_data_m = re.match(b'(\w+): (.*)', out)
+    email = None
+    if user_data_m:
+        if not user:
+            user = user_data_m.group(1).decode()
+        email = user_data_m.group(2).decode().replace('"', '')
 
-    fetch_package(user, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir)
+    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir)
