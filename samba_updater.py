@@ -29,6 +29,19 @@ def fetch_tags(package, versions):
             tags[version] = res[0]
     return tags
 
+def cleanup(api_url, home_proj, home_pkg, proj_dir, clone_dir, updated=False):
+    # Delete the package unless we have generated an update
+    if not updated:
+        ret = Popen([which('osc'), '-A', api_url, 'rdelete', home_proj, home_pkg, '-m', 'Deleting package %s as part of automated update' % home_pkg]).wait()
+        if ret == 0:
+            print('Deleted branch target %s/%s' % (home_proj, home_pkg))
+        else:
+            print('Failed to delete branch target %s/%s' % (home_proj, home_pkg))
+    rmtree(proj_dir)
+    print('Deleted project directory %s' % proj_dir)
+    rmtree(clone_dir)
+    print('Deleted samba shallow clone %s' % clone_dir)
+
 def fetch_package(user, api_url, project, package, output_dir):
     global samba_git_url
     # Choose a random package name (to avoid name collisions)
@@ -154,14 +167,24 @@ def fetch_package(user, api_url, project, package, output_dir):
     os.chdir(cwd)
     print('Downloaded package sources')
 
-    # Delete the package unless we have generated an update
-    ret = Popen([which('osc'), '-A', api_url, 'rdelete', home_proj, home_pkg, '-m', 'Deleting package %s as part of automated update' % home_pkg]).wait()
-    if ret == 0:
-        print('Deleted branch target %s/%s' % (home_proj, home_pkg))
-    rmtree(proj_dir)
-    print('Deleted project directory %s' % proj_dir)
-    rmtree(clone_dir)
-    print('Deleted samba shallow clone %s' % clone_dir)
+    # Verify the sources
+    copyfile(os.path.join(proj_dir, tar), os.path.join(output_dir, tar))
+    copyfile(os.path.join(proj_dir, asc), os.path.join(output_dir, asc))
+    os.chdir(output_dir)
+    Popen([which('gunzip'), tar], stdout=PIPE).wait()
+    _, out = Popen([which('gpg'), '--verify', asc], stdout=PIPE, stderr=PIPE).communicate()
+    mt = b'Good signature from "Samba Library Distribution Key \<samba\-bugs@samba\.org\>"'
+    if len(re.findall(mt, out)) > 0:
+        print('Verified package sources')
+    else:
+        print(out)
+        cleanup(api_url, home_proj, home_pkg, proj_dir, clone_dir)
+        return
+    os.remove(os.path.join(output_dir, '%s-%s.tar' % (package, latest_version)))
+    os.remove(os.path.join(output_dir, asc))
+    os.chdir(cwd)
+
+    cleanup(api_url, home_proj, home_pkg, proj_dir, clone_dir)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run against obs samba package to update to latest version. This will branch the target package into your home project, then check it out on the local machine.')
