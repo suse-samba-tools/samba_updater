@@ -123,9 +123,16 @@ def fetch_package(user, api_url, project, package, output_dir):
         for vers in sorted_versions:
             changelog.write(new_vers[vers]['log'])
             changelog.write('\n')
-        changelog.write('# Edit this changelog, then save and exit to submit\n')
+        changelog.write('\n')
         changelog_file = changelog.name
     Popen([which('vim'), changelog_file]).wait()
+    changelogs = glob(os.path.join(proj_dir, '*.changes'))
+    changes = open(changelog_file, 'r').read()
+    for changelog in changelogs:
+        existing = open(changelog, 'r').read()
+        with open(changelog, 'w') as w:
+            w.write(changes)
+            w.write(existing)
 
     # Delete the package unless we have generated an update
     ret = Popen([which('osc'), '-A', api_url, 'rdelete', home_proj, home_pkg, '-m', 'Deleting package %s as part of automated update' % home_pkg]).wait()
