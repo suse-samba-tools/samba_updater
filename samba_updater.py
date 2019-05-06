@@ -225,7 +225,7 @@ def fetch_package(user, email, api_url, project, package, output_dir):
     cleanup(api_url, home_proj, home_pkg, proj_dir, clone_dir, updated=True)
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Run against obs samba package to update to latest version. This will branch the target package into your home project, then check it out on the local machine.')
+    parser = argparse.ArgumentParser(description='Run against obs samba package to update to latest version. This will branch the target package into your home project, then check it out on the local machine. It also downloads the latest package version from samba.org, then clones a shallow copy of samba and generates a changelog entry. Finally, an updated package will be checked into your home project on obs.')
     parser.add_argument('-A', '--apiurl', help='osc URL/alias', action='store', default='https://api.opensuse.org')
     parser.add_argument('SOURCEPROJECT', help='The source project to branch from')
     parser.add_argument('SOURCEPACKAGE', help='The source package to update')
