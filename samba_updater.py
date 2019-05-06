@@ -198,21 +198,28 @@ def fetch_package(user, email, api_url, project, package, output_dir):
     print('Updated version in the spec file')
 
     # Run a test build
+    ret = -1
     os.chdir(proj_dir)
-    p = Popen([which('osc'), 'build', '-j8', '--ccache', '--local-package', '--trust-all-projects', '--clean', spec_file], stdout=PIPE, stderr=PIPE)
-    out, _ = p.communicate()
-    if p.returncode != 0:
-        print('Build failed. Fixup the package sources then submit manually.')
-        if out:
-            data = out.decode().split('\n')
-            if len(data) > 10:
-                for line in data[-10:]:
-                    print(line)
-            else:
-                print(out.decode())
-        print('The project sources are found in %s.' % proj_dir)
-        cleanup(api_url, None, None, None, clone_dir)
-        return
+    while ret != 0:
+        p = Popen([which('osc'), 'build', '-j8', '--ccache', '--local-package', '--trust-all-projects', '--clean', spec_file], stdout=PIPE, stderr=PIPE)
+        out, _ = p.communicate()
+        ret = p.returncode
+        if ret != 0:
+            print('Build failed.')
+            if out:
+                data = out.decode().split('\n')
+                if len(data) > 20:
+                    for line in data[-20:]:
+                        print(line)
+                else:
+                    print(out.decode())
+            print('The project sources are found in %s.' % proj_dir)
+            input('Fixup the package sources, then press enter to continue...')
+        else:
+            print('Build succeeded. Submitting sources to the build service.')
+
+    # Checkin the changes
+    Popen([which('osc'), 'ci']).wait()
     os.chdir(cwd)
 
     cleanup(api_url, home_proj, home_pkg, proj_dir, clone_dir)
