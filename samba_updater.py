@@ -201,6 +201,7 @@ def fetch_package(user, email, api_url, project, package, output_dir):
     ret = -1
     os.chdir(proj_dir)
     while ret != 0:
+        print('Testing the build for %s' % package)
         p = Popen([which('osc'), 'build', '-j8', '--ccache', '--local-package', '--trust-all-projects', '--clean', spec_file], stdout=PIPE, stderr=PIPE)
         out, _ = p.communicate()
         ret = p.returncode
@@ -208,13 +209,17 @@ def fetch_package(user, email, api_url, project, package, output_dir):
             print('Build failed.')
             if out:
                 data = out.decode().split('\n')
-                if len(data) > 20:
-                    for line in data[-20:]:
+                if len(data) > 50:
+                    for line in data[-50:]:
                         print(line)
                 else:
                     print(out.decode())
             print('The project sources are found in %s.' % proj_dir)
-            input('Fixup the package sources, then press enter to continue...')
+            print('Fixup the package sources, then exit the testing shell to continue...')
+            # Opens a shell in the project directory
+            env = os.environ
+            env['PS1'] = '%s> ' % package
+            Popen([os.environ['SHELL']], env=env).wait()
         else:
             print('Build succeeded. Submitting sources to the build service.')
 
