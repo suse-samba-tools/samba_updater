@@ -222,7 +222,7 @@ def fetch_package(user, email, api_url, project, package, output_dir):
     Popen([which('osc'), 'ci']).wait()
     os.chdir(cwd)
 
-    cleanup(api_url, home_proj, home_pkg, proj_dir, clone_dir)
+    cleanup(api_url, home_proj, home_pkg, proj_dir, clone_dir, updated=True)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run against obs samba package to update to latest version. This will branch the target package into your home project, then check it out on the local machine.')
