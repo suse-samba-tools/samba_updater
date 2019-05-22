@@ -41,7 +41,7 @@ def cleanup(api_url, details, updated=False):
         rmtree(details['proj_dir'])
         print('Deleted project directory %s' % details['proj_dir'])
 
-def fetch_package(user, email, api_url, project, packages, output_dir):
+def fetch_package(user, email, api_url, project, packages, output_dir, major_vers):
     global samba_git_url
     if not output_dir:
         output_dir = mkdtemp()
@@ -87,10 +87,16 @@ def fetch_package(user, email, api_url, project, packages, output_dir):
 
         # Check for newer package version
         details[package]['new'] = {}
-        vers_mo = re.compile('%d\.%d\.(\d+)' % (vv[0], vv[1]))
+        use_major_vers = False
+        # Use the specified major version, unless it matches the current major version
+        if major_vers[package] and major_vers[package] != details[package]['version'][:len(major_vers[package])]:
+            use_major_vers = True
+            vers_mo = re.compile('%s\.(\d+)' % major_vers[package])
+        else:
+            vers_mo = re.compile('%d\.%d\.(\d+)' % (vv[0], vv[1]))
         for upstream_vers in versions:
             m = vers_mo.match(upstream_vers)
-            if m and int(m.group(1)) > vv[-1]:
+            if m and (int(m.group(1)) > vv[-1] or use_major_vers):
                 details[package]['new'][upstream_vers] = {'vers': int(m.group(1))}
 
     # Clone a copy of samba
@@ -243,11 +249,26 @@ def fetch_package(user, email, api_url, project, packages, output_dir):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run against obs samba package to update to latest version. This will branch the target package into your home project, then check it out on the local machine. It also downloads the latest package version from samba.org, then clones a shallow copy of samba and generates a changelog entry. Finally, an updated package will be checked into your home project on obs.')
     parser.add_argument('-A', '--apiurl', help='osc URL/alias', action='store', default='https://api.opensuse.org')
+    parser.add_argument('--ldb-major-version', action='store', default=None, help='Default keeps current major version. Only specify if doing a major version update.')
+    parser.add_argument('--talloc-major-version', action='store', default=None, help='Default keeps current major version. Only specify if doing a major version update.')
+    parser.add_argument('--tdb-major-version', action='store', default=None, help='Default keeps current major version. Only specify if doing a major version update.')
+    parser.add_argument('--tevent-major-version', action='store', default=None, help='Default keeps current major version. Only specify if doing a major version update.')
     parser.add_argument('SOURCEPROJECT', help='The source project to branch from')
     parser.add_argument('SOURCEPACKAGE', help='The source package[s] to update (default=[talloc, tdb, tevent, ldb])', nargs='*', default=['talloc', 'tdb', 'tevent', 'ldb'])
     parser.add_argument('-o', '--output-dir', help='Place the package directory in the specified directory instead of a temp directory', action='store', default=None)
 
     args = parser.parse_args()
+
+    # Get the package version requirements (default is None, meaning keep current major version)
+    vers = {}
+    vers['ldb'] = args.ldb_major_version
+    vers['talloc'] = args.talloc_major_version
+    vers['tdb'] = args.tdb_major_version
+    vers['tevent'] = args.tevent_major_version
+    for pkg in vers.keys():
+        if vers[pkg] and not re.match('\d+\.\d+', vers[pkg]):
+            print('Major versions should be in the form \'1.2\', being the first 2 digits of the version number.')
+            exit(1)
 
     # Try to parse user from ~/.oscrc
     oscrc = None
@@ -276,4 +297,4 @@ if __name__ == "__main__":
             user = user_data_m.group(1).decode()
         email = user_data_m.group(2).decode().replace('"', '')
 
-    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir)
+    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir, vers)
