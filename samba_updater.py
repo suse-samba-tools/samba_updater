@@ -245,6 +245,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir, major_ver
         cleanup(api_url, details[package], updated=True)
     rmtree(clone_dir)
     print('Deleted samba shallow clone %s' % clone_dir)
+    print('Results are posted in project %s' % rproject)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run against obs samba package to update to latest version. This will branch the target package into your home project, then check it out on the local machine. It also downloads the latest package version from samba.org, then clones a shallow copy of samba and generates a changelog entry. Finally, an updated package will be checked into your home project on obs.')
