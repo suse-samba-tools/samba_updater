@@ -57,7 +57,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir):
         out, err = Popen([which('osc'), '-A', api_url, 'branch', project, package, nproject, rpackage], stdout=PIPE, stderr=PIPE).communicate()
         details[package]['proj'], details[package]['pkg'] = (None, None)
         if out and b'package can be checked out with' in out:
-            details[package]['proj'], details[package]['pkg'] = [p.decode() for p in re.findall(b'A working copy of the branched package can be checked out with:\n\nosc co ([^/]*)/(.*)', out)[0]]
+            details[package]['proj'], details[package]['pkg'] = [p.decode() for p in re.findall(b'A working copy of the branched package can be checked out with:\n\nosc.*\s+co ([^/]*)/(.*)', out)[0]]
             print('Created branch target %s/%s' % (details[package]['proj'], details[package]['pkg']))
         else:
             raise Exception(err.decode())
