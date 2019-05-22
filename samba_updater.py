@@ -93,13 +93,11 @@ def fetch_package(user, email, api_url, project, packages, output_dir):
             if m and int(m.group(1)) > vv[-1]:
                 details[package]['new'][upstream_vers] = {'vers': int(m.group(1))}
 
-    # Clone a shallow copy of samba
-    min_date = min([datetime.strptime(details[p]['date'], '%Y-%m-%d') for p in packages])
-    date = min_date.strftime('%Y-%m-%d')
+    # Clone a copy of samba
     rclone = 'samba-%s' % next(get_candidate_names())
     clone_dir = os.path.join(output_dir, rclone)
-    print('Shallow cloning samba since %s' % date)
-    Popen([which('git'), 'clone', '--shallow-since=%s' % date, samba_git_url, clone_dir], stdout=PIPE).wait()
+    print('Cloning samba')
+    Popen([which('git'), 'clone', samba_git_url, clone_dir], stdout=PIPE).wait()
 
     for package in packages:
         # Generate a changelog entry
