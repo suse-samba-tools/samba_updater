@@ -48,6 +48,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir):
     else:
         output_dir = os.path.abspath(output_dir)
     details = {}
+    new_versions = {}
     for package in packages:
         details[package] = {}
         # Choose a random package name (to avoid name collisions)
@@ -133,6 +134,8 @@ def fetch_package(user, email, api_url, project, packages, output_dir):
         os.chdir(cwd)
         sorted_versions = sorted(details[package]['new'].keys(), key=lambda k: details[package]['new'][k]['vers'], reverse=True)
         latest_version = sorted_versions[0]
+        new_versions[package] = latest_version
+
         changelog_file = None
         with NamedTemporaryFile('w', dir=output_dir, delete=False, suffix='.changes') as changelog:
             now = datetime.utcnow()
@@ -198,6 +201,8 @@ def fetch_package(user, email, api_url, project, packages, output_dir):
             data = open(specfile, 'r').read()
             with open(specfile, 'w') as w:
                 data = re.sub(r'([Vv]ersion:\s+)%s' % details[package]['version'], r'\g<1>%s' % latest_version, data)
+                for pkg in new_versions.keys():
+                    data = re.sub('%%define %s_version \d+\.\d+\.\d+' % pkg, '%%define %s_version %s' % (pkg, new_versions[pkg]), data)
                 w.write(data)
         print('Updated version in the spec file')
 
