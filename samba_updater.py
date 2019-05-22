@@ -135,6 +135,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir):
         sorted_versions = sorted(details[package]['new'].keys(), key=lambda k: details[package]['new'][k]['vers'], reverse=True)
         latest_version = sorted_versions[0]
         new_versions[package] = latest_version
+        print('Updating %s to latest version %s' % (package, latest_version))
 
         changelog_file = None
         with NamedTemporaryFile('w', dir=output_dir, delete=False, suffix='.changes') as changelog:
