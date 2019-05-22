@@ -239,7 +239,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run against obs samba package to update to latest version. This will branch the target package into your home project, then check it out on the local machine. It also downloads the latest package version from samba.org, then clones a shallow copy of samba and generates a changelog entry. Finally, an updated package will be checked into your home project on obs.')
     parser.add_argument('-A', '--apiurl', help='osc URL/alias', action='store', default='https://api.opensuse.org')
     parser.add_argument('SOURCEPROJECT', help='The source project to branch from')
-    parser.add_argument('SOURCEPACKAGE', help='The source package[s] to update (default=[talloc, tdb, tevent, ldb])', nargs='+', default=['talloc', 'tdb', 'tevent', 'ldb'])
+    parser.add_argument('SOURCEPACKAGE', help='The source package[s] to update (default=[talloc, tdb, tevent, ldb])', nargs='*', default=['talloc', 'tdb', 'tevent', 'ldb'])
     parser.add_argument('-o', '--output-dir', help='Place the package directory in the specified directory instead of a temp directory', action='store', default=None)
 
     args = parser.parse_args()
