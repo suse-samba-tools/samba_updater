@@ -49,13 +49,12 @@ def fetch_package(user, email, api_url, project, packages, output_dir):
         output_dir = os.path.abspath(output_dir)
     details = {}
     new_versions = {}
+    # Choose a random project name (to avoid name collisions)
+    rproject = 'home:%s:branches:%s:%s' % (user, project, next(get_candidate_names()))
     for package in packages:
         details[package] = {}
-        # Choose a random package name (to avoid name collisions)
-        rpackage = '%s-%s' % (package, next(get_candidate_names()))
-        nproject = 'home:%s:branches:%s' % (user, project)
         # Branch the package
-        out, err = Popen([which('osc'), '-A', api_url, 'branch', project, package, nproject, rpackage], stdout=PIPE, stderr=PIPE).communicate()
+        out, err = Popen([which('osc'), '-A', api_url, 'branch', project, package, rproject, package], stdout=PIPE, stderr=PIPE).communicate()
         details[package]['proj'], details[package]['pkg'] = (None, None)
         if out and b'package can be checked out with' in out:
             details[package]['proj'], details[package]['pkg'] = [p.decode() for p in re.findall(b'A working copy of the branched package can be checked out with:\n\nosc.*\s+co ([^/]*)/(.*)', out)[0]]
