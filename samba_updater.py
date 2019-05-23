@@ -41,7 +41,7 @@ def cleanup(api_url, details, updated=False):
         rmtree(details['proj_dir'])
         print('Deleted project directory %s' % details['proj_dir'])
 
-def fetch_package(user, email, api_url, project, packages, output_dir, major_vers):
+def fetch_package(user, email, api_url, project, packages, output_dir, major_vers, skip_test):
     global samba_git_url
     if not output_dir:
         output_dir = mkdtemp()
@@ -215,28 +215,29 @@ def fetch_package(user, email, api_url, project, packages, output_dir, major_ver
         # Run a test build
         ret = -1
         os.chdir(details[package]['proj_dir'])
-        while ret != 0:
-            print('Testing the build for %s' % package)
-            p = Popen([which('osc'), 'build', '-j8', '--ccache', '--local-package', '--trust-all-projects', '--clean', spec_file], stdout=PIPE, stderr=PIPE)
-            out, _ = p.communicate()
-            ret = p.returncode
-            if ret != 0:
-                print('Build failed.')
-                if out:
-                    data = out.decode().split('\n')
-                    if len(data) > 50:
-                        for line in data[-50:]:
-                            print(line)
-                    else:
-                        print(out.decode())
-                print('The project sources are found in %s.' % details[package]['proj_dir'])
-                print('Fixup the package sources, then exit the testing shell to continue...')
-                # Opens a shell in the project directory
-                env = os.environ
-                env['PS1'] = '%s> ' % package
-                Popen([os.environ['SHELL']], env=env).wait()
-            else:
-                print('Build succeeded. Submitting sources to the build service.')
+        if not skip_test:
+            while ret != 0:
+                print('Testing the build for %s' % package)
+                p = Popen([which('osc'), 'build', '-j8', '--ccache', '--local-package', '--trust-all-projects', '--clean', spec_file], stdout=PIPE, stderr=PIPE)
+                out, _ = p.communicate()
+                ret = p.returncode
+                if ret != 0:
+                    print('Build failed.')
+                    if out:
+                        data = out.decode().split('\n')
+                        if len(data) > 50:
+                            for line in data[-50:]:
+                                print(line)
+                        else:
+                            print(out.decode())
+                    print('The project sources are found in %s.' % details[package]['proj_dir'])
+                    print('Fixup the package sources, then exit the testing shell to continue...')
+                    # Opens a shell in the project directory
+                    env = os.environ
+                    env['PS1'] = '%s> ' % package
+                    Popen([os.environ['SHELL']], env=env).wait()
+                else:
+                    print('Build succeeded. Submitting sources to the build service.')
 
         # Checkin the changes
         Popen([which('osc'), 'ci']).wait()
@@ -254,6 +255,7 @@ if __name__ == "__main__":
     parser.add_argument('--talloc-major-version', action='store', default=None, help='Default keeps current major version. Only specify if doing a major version update.')
     parser.add_argument('--tdb-major-version', action='store', default=None, help='Default keeps current major version. Only specify if doing a major version update.')
     parser.add_argument('--tevent-major-version', action='store', default=None, help='Default keeps current major version. Only specify if doing a major version update.')
+    parser.add_argument('--skip-test', action='store_true', default=False, help='Use to disable build testing of new sources (this will submit to the build service with testing!)')
     parser.add_argument('SOURCEPROJECT', help='The source project to branch from')
     parser.add_argument('SOURCEPACKAGE', help='The source package[s] to update (default=[talloc, tdb, tevent, ldb])', nargs='*', default=['talloc', 'tdb', 'tevent', 'ldb'])
     parser.add_argument('-o', '--output-dir', help='Place the package directory in the specified directory instead of a temp directory', action='store', default=None)
@@ -298,4 +300,4 @@ if __name__ == "__main__":
             user = user_data_m.group(1).decode()
         email = user_data_m.group(2).decode().replace('"', '')
 
-    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir, vers)
+    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir, vers, args.skip_test)
