@@ -138,7 +138,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir, major_ver
             details[package]['new'][vers]['log'] = log.strip()
         os.chdir(cwd)
         sorted_versions = sorted(details[package]['new'].keys(), key=lambda k: details[package]['new'][k]['vers'], reverse=True)
-        latest_version = sorted_versions[0]
+        latest_version = sorted_versions[0] if len(sorted_versions) > 0 else details[package]['version']
         new_versions[package] = latest_version
         print('Updating %s to latest version %s' % (package, latest_version))
 
