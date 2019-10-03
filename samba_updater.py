@@ -131,7 +131,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir, major_ver
                     continue
                 elif re.match('\s+autobuild\-date\(\w+\):\s+.*', line.lower()):
                     continue
-                line = re.sub(r'\(bug\s*#\s*(\d+)\)', r'(bso#\1)', line)
+                line = re.sub(r'\(bug\s*#?\s*(\d+)\)', r'(bso#\1)', line)
                 line = line.replace('    * ', '  + ').replace('      ', '    ')
                 line = line.replace('%s: version %s' % (package, vers), '- Update to %s' % vers)
                 log += '%s\n' % line
