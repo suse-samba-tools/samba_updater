@@ -41,7 +41,25 @@ def cleanup(api_url, details, updated=False):
         rmtree(details['proj_dir'])
         print('Deleted project directory %s' % details['proj_dir'])
 
-def fetch_package(user, email, api_url, project, packages, output_dir, major_vers, skip_test):
+def older_package(nvv, uvv):
+    if uvv[0] < nvv[0]:
+        return True
+    elif uvv[0] == nvv[0] and uvv[1] < nvv[1]:
+        return True
+    elif uvv[0] == nvv[0] and uvv[1] == nvv[1] and uvv[2] < nvv[2]:
+        return True
+    return False
+
+def newer_package(vv, uvv):
+    if uvv[0] > vv[0]:
+        return True
+    elif uvv[0] == vv[0] and uvv[1] > vv[1]:
+        return True
+    elif uvv[0] == vv[0] and uvv[1] == vv[1] and uvv[2] > vv[2]:
+        return True
+    return False
+
+def fetch_package(user, email, api_url, project, packages, output_dir, samba_vers, skip_test, clone_dir, remote):
     global samba_git_url
     if not output_dir:
         output_dir = mkdtemp()
@@ -75,6 +93,35 @@ def fetch_package(user, email, api_url, project, packages, output_dir, major_ver
         spec = Spec.from_file(spec_file)
         details[package]['version'] = spec.version
 
+    # Clone a copy of samba
+    cleanup_clone = False
+    if not clone_dir:
+        rclone = 'samba-%s' % next(get_candidate_names())
+        clone_dir = os.path.join(output_dir, rclone)
+        print('Cloning samba')
+        Popen([which('git'), 'clone', samba_git_url, clone_dir], stdout=PIPE).wait()
+        cleanup_clone = True
+    else:
+        cwd = os.getcwd()
+        os.chdir(clone_dir)
+        Popen([which('git'), 'fetch', remote], stdout=PIPE).wait()
+        os.chdir(cwd)
+
+    for package in packages:
+        # Check for newer package version
+        cwd = os.getcwd()
+        os.chdir(clone_dir)
+        branch = 'v%s-%s-stable' % tuple(samba_vers.split('.'))
+        if Popen([which('git'), 'checkout', '--track', '%s/%s' % (remote, branch)], stdout=PIPE).wait() == 128:
+            Popen([which('git'), 'checkout', branch], stdout=PIPE).wait()
+            Popen([which('git'), 'pull', remote, branch], stdout=PIPE).wait()
+        latest_version = None
+        with open('lib/%s/wscript' % package, 'r') as r:
+            res = re.findall("VERSION = '(.*)'", r.read())
+            if len(res) == 1:
+                latest_version = res[0]
+        nvv = [int(v) for v in latest_version.split('.')]
+
         # Fetch upstream versions
         details[package]['url'] = 'https://www.samba.org/ftp/pub/%s' % package
         resp = request.urlopen(details[package]['url'])
@@ -84,33 +131,21 @@ def fetch_package(user, email, api_url, project, packages, output_dir, major_ver
         details[package]['date'] = re.findall('href="%s\-%d\.%d\.%d\.tar\.gz"\>%s\-%d\.%d\.%d\.tar\.gz\</a\>\</td\>\<td align="right">(\d{4}\-\d{2}\-\d{2})' % (package, vv[0], vv[1], vv[2], package, vv[0], vv[1], vv[2]), page_data)[-1]
 
         print('Current version of %s is %s published on %s' % (package, details[package]['version'], details[package]['date']))
+        print('New version of %s is %s' % (package, latest_version))
+        if details[package]['version'] == latest_version:
+            print('Skipping upgrade because the package has no update')
+            continue
 
         # Check for newer package version
-        details[package]['new'] = {}
-        use_major_vers = False
-        # Use the specified major version, unless it matches the current major version
-        if major_vers[package] and major_vers[package] != details[package]['version'][:len(major_vers[package])]:
-            use_major_vers = True
-            vers_mo = re.compile('%s\.(\d+)' % major_vers[package])
-        else:
-            vers_mo = re.compile('%d\.%d\.(\d+)' % (vv[0], vv[1]))
+        details[package]['new'] = {latest_version: {}}
         for upstream_vers in versions:
-            m = vers_mo.match(upstream_vers)
-            if m and (int(m.group(1)) > vv[-1] or use_major_vers):
-                details[package]['new'][upstream_vers] = {'vers': int(m.group(1))}
+            uvv = [int(v) for v in upstream_vers.split('.')]
+            if newer_package(vv, uvv) and older_package(nvv, uvv):
+                details[package]['new'][upstream_vers] = {}
 
-    # Clone a copy of samba
-    rclone = 'samba-%s' % next(get_candidate_names())
-    clone_dir = os.path.join(output_dir, rclone)
-    print('Cloning samba')
-    Popen([which('git'), 'clone', samba_git_url, clone_dir], stdout=PIPE).wait()
-
-    for package in packages:
         # Generate a changelog entry
         git_tags = fetch_tags(package, details[package]['new'].keys())
         print('Reading changelog from git history')
-        cwd = os.getcwd()
-        os.chdir(clone_dir)
         for vers in details[package]['new'].keys():
             out, _ = Popen([which('git'), 'log', '-1', git_tags[vers]], stdout=PIPE).communicate()
             log = ''
@@ -137,8 +172,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir, major_ver
                 log += '%s\n' % line
             details[package]['new'][vers]['log'] = log.strip()
         os.chdir(cwd)
-        sorted_versions = sorted(details[package]['new'].keys(), key=lambda k: details[package]['new'][k]['vers'], reverse=True)
-        latest_version = sorted_versions[0] if len(sorted_versions) > 0 else details[package]['version']
+        sorted_versions = sorted(details[package]['new'].keys(), key=lambda s: list(map(int, s.split('.'))), reverse=True)
         new_versions[package] = latest_version
         print('Updating %s to latest version %s' % (package, latest_version))
 
@@ -152,7 +186,11 @@ def fetch_package(user, email, api_url, project, packages, output_dir, major_ver
                 changelog.write('\n')
             changelog.write('\n')
             changelog_file = changelog.name
-        Popen([which('vim'), changelog_file]).wait()
+        if 'EDITOR' in os.environ:
+            editor = os.environ['EDITOR']
+        else:
+            editor = which('vim')
+        Popen([editor, changelog_file]).wait()
         changelogs = glob(os.path.join(details[package]['proj_dir'], '*.changes'))
         changes = open(changelog_file, 'r').read()
         for changelog in changelogs:
@@ -244,34 +282,28 @@ def fetch_package(user, email, api_url, project, packages, output_dir, major_ver
         os.chdir(cwd)
 
         cleanup(api_url, details[package], updated=True)
-    rmtree(clone_dir)
-    print('Deleted samba shallow clone %s' % clone_dir)
+    if cleanup_clone:
+        rmtree(clone_dir)
+        print('Deleted samba clone %s' % clone_dir)
     print('Results are posted in project %s' % rproject)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Run against obs samba package to update to latest version. This will branch the target package into your home project, then check it out on the local machine. It also downloads the latest package version from samba.org, then clones a shallow copy of samba and generates a changelog entry. Finally, an updated package will be checked into your home project on obs.')
     parser.add_argument('-A', '--apiurl', help='osc URL/alias', action='store', default='https://api.opensuse.org')
-    parser.add_argument('--ldb-major-version', action='store', default=None, help='Default keeps current major version. Only specify if doing a major version update.')
-    parser.add_argument('--talloc-major-version', action='store', default=None, help='Default keeps current major version. Only specify if doing a major version update.')
-    parser.add_argument('--tdb-major-version', action='store', default=None, help='Default keeps current major version. Only specify if doing a major version update.')
-    parser.add_argument('--tevent-major-version', action='store', default=None, help='Default keeps current major version. Only specify if doing a major version update.')
     parser.add_argument('--skip-test', action='store_true', default=False, help='Use to disable build testing of new sources (this will submit to the build service with testing!)')
+    parser.add_argument('--samba', help='A git checkout of samba (this speeds up processing time)', action='store', default=None)
+    parser.add_argument('--samba-remote', help='When paired with --samba, specifies the samba remote name (default=origin)', action='store', default='origin')
+    parser.add_argument('SAMBA_VERSION', help='The relative samba version')
     parser.add_argument('SOURCEPROJECT', help='The source project to branch from')
     parser.add_argument('SOURCEPACKAGE', help='The source package[s] to update (default=[talloc, tdb, tevent, ldb])', nargs='*', default=['talloc', 'tdb', 'tevent', 'ldb'])
     parser.add_argument('-o', '--output-dir', help='Place the package directory in the specified directory instead of a temp directory', action='store', default=None)
 
     args = parser.parse_args()
 
-    # Get the package version requirements (default is None, meaning keep current major version)
-    vers = {}
-    vers['ldb'] = args.ldb_major_version
-    vers['talloc'] = args.talloc_major_version
-    vers['tdb'] = args.tdb_major_version
-    vers['tevent'] = args.tevent_major_version
-    for pkg in vers.keys():
-        if vers[pkg] and not re.match('\d+\.\d+', vers[pkg]):
-            print('Major versions should be in the form \'1.2\', being the first 2 digits of the version number.')
-            exit(1)
+    # Parse the samba version
+    if not re.match('\d+\.\d+', args.SAMBA_VERSION):
+        sys.stderr.write('Samba version should be in the form \'4.10\', being the first 2 digits of the version number.\n')
+        exit(1)
 
     # Try to parse user from ~/.oscrc
     oscrc = None
@@ -300,4 +332,4 @@ if __name__ == "__main__":
             user = user_data_m.group(1).decode()
         email = user_data_m.group(2).decode().replace('"', '')
 
-    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir, vers, args.skip_test)
+    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir, args.SAMBA_VERSION, args.skip_test, args.samba, args.samba_remote)
