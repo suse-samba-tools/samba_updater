@@ -64,7 +64,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
     if not output_dir:
         output_dir = mkdtemp()
     else:
-        output_dir = os.path.abspath(output_dir)
+        output_dir = os.path.abspath(os.path.expanduser(output_dir))
     details = {}
     new_versions = {}
     # Choose a random project name (to avoid name collisions)
@@ -103,6 +103,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
         cleanup_clone = True
     else:
         cwd = os.getcwd()
+        clone_dir = os.path.abspath(os.path.expanduser(clone_dir))
         os.chdir(clone_dir)
         Popen([which('git'), 'fetch', remote], stdout=PIPE).wait()
         os.chdir(cwd)
