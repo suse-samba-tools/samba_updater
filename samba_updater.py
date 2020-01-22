@@ -134,7 +134,8 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
 
         print('Current version of %s is %s published on %s' % (package, details[package]['version'], details[package]['date']))
         print('New version of %s is %s' % (package, latest_version))
-        if details[package]['version'] == latest_version:
+        lvv = [int(v) for v in latest_version.split('.')]
+        if details[package]['version'] == latest_version or older_package(vv, lvv):
             print('Skipping upgrade because the package has no update')
             continue
 
