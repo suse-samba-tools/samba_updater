@@ -3,7 +3,7 @@ from subprocess import Popen, PIPE
 import argparse
 from shutil import which, rmtree, copyfile
 import re, os, sys
-from tempfile import mkdtemp, _get_candidate_names as get_candidate_names, NamedTemporaryFile
+from tempfile import mkdtemp, _get_candidate_names, NamedTemporaryFile
 def install_package(package_name):
     print('%s needs to be installed:' % package_name)
     Popen(['sudo %s in -y %s' % (which('zypper'), package_name)], shell=True).wait()
@@ -16,6 +16,13 @@ from glob import glob
 from configparser import ConfigParser
 from urllib import request, error
 from datetime import datetime
+
+# OBS Project names can't begin with an underscore
+def get_candidate_names():
+    candidate = next(_get_candidate_names())
+    while candidate[0] == '_':
+        candidate = next(_get_candidate_names())
+    return candidate
 
 samba_git_url = 'https://gitlab.com/samba-team/samba.git'
 
@@ -69,7 +76,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
     new_versions = {}
     # Choose a random project name (to avoid name collisions)
     if not rproject:
-        rproject = 'home:%s:branches:%s:%s' % (user, project, next(get_candidate_names()))
+        rproject = 'home:%s:branches:%s:%s' % (user, project, get_candidate_names())
     for package in packages:
         details[package] = {}
         if not dest_exists:
@@ -96,7 +103,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
     # Clone a copy of samba
     cleanup_clone = False
     if not clone_dir:
-        rclone = 'samba-%s' % next(get_candidate_names())
+        rclone = 'samba-%s' % get_candidate_names()
         clone_dir = os.path.join(output_dir, rclone)
         print('Cloning samba')
         Popen([which('git'), 'clone', samba_git_url, clone_dir], stdout=PIPE).wait()
