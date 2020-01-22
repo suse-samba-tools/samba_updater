@@ -2,7 +2,7 @@
 from subprocess import Popen, PIPE
 import argparse
 from shutil import which, rmtree, copyfile
-import re, os
+import re, os, sys
 from tempfile import mkdtemp, _get_candidate_names as get_candidate_names, NamedTemporaryFile
 def install_package(package_name):
     print('%s needs to be installed:' % package_name)
@@ -328,7 +328,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # Parse the samba version
-    if not re.match('\d+\.\d+', args.SAMBA_VERSION):
+    if not re.match('\d+\.\d+$', args.SAMBA_VERSION):
         sys.stderr.write('Samba version should be in the form \'4.10\', being the first 2 digits of the version number.\n')
         exit(1)
 
