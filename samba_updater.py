@@ -166,10 +166,12 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
                     continue
                 elif re.match('\s+autobuild\-date\(\w+\):\s+.*', line.lower()):
                     continue
+                line = re.sub(r'https?://bugzilla.samba.org/show_bug.cgi\?id\=(\d+)', r'(bso#\1)', line)
                 line = re.sub(r'\(bug\s*#?\s*(\d+)\)', r'(bso#\1)', line)
                 line = line.replace('    * ', '  + ').replace('      ', '    ')
                 line = line.replace('%s: version %s' % (package, vers), '- Update to %s' % vers)
                 log += '%s\n' % line
+            log = re.sub(r'\n\s*BUG:\s*', '; ', log)
             details[package]['new'][vers]['log'] = log.strip()
         os.chdir(cwd)
         sorted_versions = sorted(details[package]['new'].keys(), key=lambda s: list(map(int, s.split('.'))), reverse=True)
