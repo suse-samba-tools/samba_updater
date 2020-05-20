@@ -128,7 +128,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
         page_data = resp.read().decode()
         versions = set(re.findall('<a href="%s-([\.\-\w]+)\.tar\.[^"]+">' % package, page_data))
         vv = [int(v) for v in details[package]['version'].split('.')]
-        details[package]['date'] = re.findall('href="%s\-%d\.%d\.%d\.tar\.gz"\>%s\-%d\.%d\.%d\.tar\.gz\</a\>\</td\>\<td align="right">(\d{4}\-\d{2}\-\d{2})' % (package, vv[0], vv[1], vv[2], package, vv[0], vv[1], vv[2]), page_data)[-1]
+        details[package]['date'] = re.findall('href="%s\-%d\.%d\.%d\.tar\.gz"\>%s\-%d\.%d\.%d\.tar\.gz\</a\>\</td\>\<td [^>]+>(\d{4}\-\d{2}\-\d{2})' % (package, vv[0], vv[1], vv[2], package, vv[0], vv[1], vv[2]), page_data)[-1]
 
         print('Current version of %s is %s published on %s' % (package, details[package]['version'], details[package]['date']))
         print('New version of %s is %s' % (package, latest_version))
