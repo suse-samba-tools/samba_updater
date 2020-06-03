@@ -59,7 +59,7 @@ def newer_package(vv, uvv):
         return True
     return False
 
-def fetch_package(user, email, api_url, project, packages, output_dir, samba_vers, skip_test, clone_dir, remote, rproject):
+def fetch_package(user, email, api_url, project, packages, output_dir, samba_vers, skip_test, clone_dir, remote, rproject, dest_exists):
     global samba_git_url
     if not output_dir:
         output_dir = mkdtemp()
@@ -72,22 +72,21 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
         rproject = 'home:%s:branches:%s:%s' % (user, project, next(get_candidate_names()))
     for package in packages:
         details[package] = {}
-        # Branch the package
-        out, err = Popen([which('osc'), '-A', api_url, 'branch', project, package, rproject, package], stdout=PIPE, stderr=PIPE).communicate()
-        details[package]['proj'], details[package]['pkg'] = (None, None)
-        if out and b'package can be checked out with' in out:
-            details[package]['proj'], details[package]['pkg'] = [p.decode() for p in re.findall(b'A working copy of the branched package can be checked out with:\n\nosc.*\s+co ([^/]*)/(.*)', out)[0]]
-            print('Created branch target %s/%s' % (details[package]['proj'], details[package]['pkg']))
-        else:
-            raise Exception(err.decode())
+        if not dest_exists:
+            # Branch the package
+            out, err = Popen([which('osc'), '-A', api_url, 'branch', project, package, rproject, package], stdout=PIPE, stderr=PIPE).communicate()
+            if out and b'package can be checked out with' in out:
+                print('Created branch target %s/%s' % (rproject, package))
+            else:
+                raise Exception(err.decode())
 
         # Checkout the package in the current directory
-        details[package]['proj_dir'] = os.path.join(output_dir, details[package]['pkg'])
+        details[package]['proj_dir'] = os.path.join(output_dir, package)
         if not os.path.exists(details[package]['proj_dir']):
-            _, err = Popen([which('osc'), '-A', api_url, 'co', details[package]['proj'], details[package]['pkg'], '-o', details[package]['proj_dir']], stdout=PIPE, stderr=PIPE).communicate()
+            _, err = Popen([which('osc'), '-A', api_url, 'co', rproject, package, '-o', details[package]['proj_dir']], stdout=PIPE, stderr=PIPE).communicate()
             if err:
                 raise Exception(err.decode())
-        print('Checked out %s/%s at %s' % (details[package]['proj'], details[package]['pkg'], details[package]['proj_dir']))
+        print('Checked out %s/%s at %s' % (rproject, package, details[package]['proj_dir']))
 
         # Check the package version
         spec_file = list(set(glob(os.path.join(details[package]['proj_dir'], '*.spec'))) - set(glob(os.path.join(details[package]['proj_dir'], '*-man.spec'))))[-1]
@@ -300,6 +299,7 @@ if __name__ == "__main__":
     parser.add_argument('SOURCEPROJECT', help='The source project to branch from')
     parser.add_argument('SOURCEPACKAGE', help='The source package[s] to update (default=[talloc, tdb, tevent, ldb])', nargs='*', default=['talloc', 'tdb', 'tevent', 'ldb'])
     parser.add_argument('--dest-project', help='The destination project to branch to', default=None)
+    parser.add_argument('--dest-exists', help='Indicates if the destination branches already exist and skips branching. This should only be used in conjunction with --dest-project (otherwise this option says that a random project name already exists)', action='store_true', default=False)
     parser.add_argument('-o', '--output-dir', help='Place the package directory in the specified directory instead of a temp directory', action='store', default=None)
 
     args = parser.parse_args()
@@ -336,4 +336,4 @@ if __name__ == "__main__":
             user = user_data_m.group(1).decode()
         email = user_data_m.group(2).decode().replace('"', '')
 
-    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir, args.SAMBA_VERSION, args.skip_test, args.samba, args.samba_remote, args.dest_project)
+    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir, args.SAMBA_VERSION, args.skip_test, args.samba, args.samba_remote, args.dest_project, args.dest_exists)
