@@ -14,7 +14,7 @@ except ImportError:
     from pyrpm.spec import Spec
 from glob import glob
 from configparser import ConfigParser
-from urllib import request
+from urllib import request, error
 from datetime import datetime
 
 samba_git_url = 'https://gitlab.com/samba-team/samba.git'
@@ -148,6 +148,9 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
         git_tags = fetch_tags(package, details[package]['new'].keys())
         print('Reading changelog from git history')
         for vers in details[package]['new'].keys():
+            if vers not in git_tags:
+                details[package]['new'][vers]['log'] = '- Update to %s %s' % (package, vers)
+                continue
             out, _ = Popen([which('git'), 'log', '-1', git_tags[vers]], stdout=PIPE).communicate()
             log = ''
             for line in out.decode().split('\n'):
@@ -209,7 +212,11 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
         tar_remote = '%s/%s' % (details[package]['url'], tar)
         asc_remote = '%s/%s' % (details[package]['url'], asc)
         with open(os.path.join(details[package]['proj_dir'], tar), 'wb') as w:
-            resp = request.urlopen(tar_remote)
+            try:
+                resp = request.urlopen(tar_remote)
+            except error.HTTPError: # The file doesn't exist, bail because we can't update
+                print('Version %s of %s does not exist on %s' % (latest_version, package, details[package]['url']))
+                continue
             w.write(resp.read())
         with open(os.path.join(details[package]['proj_dir'], asc), 'wb') as w:
             resp = request.urlopen(asc_remote)
