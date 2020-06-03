@@ -59,7 +59,7 @@ def newer_package(vv, uvv):
         return True
     return False
 
-def fetch_package(user, email, api_url, project, packages, output_dir, samba_vers, skip_test, clone_dir, remote):
+def fetch_package(user, email, api_url, project, packages, output_dir, samba_vers, skip_test, clone_dir, remote, rproject):
     global samba_git_url
     if not output_dir:
         output_dir = mkdtemp()
@@ -68,7 +68,8 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
     details = {}
     new_versions = {}
     # Choose a random project name (to avoid name collisions)
-    rproject = 'home:%s:branches:%s:%s' % (user, project, next(get_candidate_names()))
+    if not rproject:
+        rproject = 'home:%s:branches:%s:%s' % (user, project, next(get_candidate_names()))
     for package in packages:
         details[package] = {}
         # Branch the package
@@ -298,6 +299,7 @@ if __name__ == "__main__":
     parser.add_argument('SAMBA_VERSION', help='The relative samba version')
     parser.add_argument('SOURCEPROJECT', help='The source project to branch from')
     parser.add_argument('SOURCEPACKAGE', help='The source package[s] to update (default=[talloc, tdb, tevent, ldb])', nargs='*', default=['talloc', 'tdb', 'tevent', 'ldb'])
+    parser.add_argument('--dest-project', help='The destination project to branch to', default=None)
     parser.add_argument('-o', '--output-dir', help='Place the package directory in the specified directory instead of a temp directory', action='store', default=None)
 
     args = parser.parse_args()
@@ -334,4 +336,4 @@ if __name__ == "__main__":
             user = user_data_m.group(1).decode()
         email = user_data_m.group(2).decode().replace('"', '')
 
-    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir, args.SAMBA_VERSION, args.skip_test, args.samba, args.samba_remote)
+    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir, args.SAMBA_VERSION, args.skip_test, args.samba, args.samba_remote, args.dest_project)
