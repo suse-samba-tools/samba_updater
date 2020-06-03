@@ -59,7 +59,7 @@ def newer_package(vv, uvv):
         return True
     return False
 
-def fetch_package(user, email, api_url, project, packages, output_dir, samba_vers, skip_test, clone_dir, remote, rproject, dest_exists):
+def fetch_package(user, email, api_url, project, packages, output_dir, samba_vers, skip_test, clone_dir, remote, rproject, branch, dest_exists):
     global samba_git_url
     if not output_dir:
         output_dir = mkdtemp()
@@ -111,7 +111,8 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
         # Check for newer package version
         cwd = os.getcwd()
         os.chdir(clone_dir)
-        branch = 'v%s-%s-stable' % tuple(samba_vers.split('.'))
+        if not branch:
+            branch = 'v%s-%s-stable' % tuple(samba_vers.split('.'))
         if Popen([which('git'), 'checkout', '--track', '%s/%s' % (remote, branch)], stdout=PIPE).wait() == 128:
             Popen([which('git'), 'checkout', branch], stdout=PIPE).wait()
             Popen([which('git'), 'pull', remote, branch], stdout=PIPE).wait()
@@ -295,6 +296,7 @@ if __name__ == "__main__":
     parser.add_argument('--skip-test', action='store_true', default=False, help='Use to disable build testing of new sources (this will submit to the build service with testing!)')
     parser.add_argument('--samba', help='A git checkout of samba (this speeds up processing time)', action='store', default=None)
     parser.add_argument('--samba-remote', help='When paired with --samba, specifies the samba remote name (default=origin)', action='store', default='origin')
+    parser.add_argument('--samba-branch', help='The branch to check for upstream versions (default=v$(SAMBA_VERSION)-stable)', default=None)
     parser.add_argument('SAMBA_VERSION', help='The relative samba version')
     parser.add_argument('SOURCEPROJECT', help='The source project to branch from')
     parser.add_argument('SOURCEPACKAGE', help='The source package[s] to update (default=[talloc, tdb, tevent, ldb])', nargs='*', default=['talloc', 'tdb', 'tevent', 'ldb'])
@@ -336,4 +338,4 @@ if __name__ == "__main__":
             user = user_data_m.group(1).decode()
         email = user_data_m.group(2).decode().replace('"', '')
 
-    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir, args.SAMBA_VERSION, args.skip_test, args.samba, args.samba_remote, args.dest_project, args.dest_exists)
+    fetch_package(user, email, args.apiurl, args.SOURCEPROJECT, args.SOURCEPACKAGE, args.output_dir, args.SAMBA_VERSION, args.skip_test, args.samba, args.samba_remote, args.dest_project, args.samba_branch, args.dest_exists)
