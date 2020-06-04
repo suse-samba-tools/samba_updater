@@ -211,20 +211,30 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
         asc = '%s-%s.tar.asc' % (package, latest_version)
         tar_remote = '%s/%s' % (details[package]['url'], tar)
         asc_remote = '%s/%s' % (details[package]['url'], asc)
-        with open(os.path.join(details[package]['proj_dir'], tar), 'wb') as w:
-            try:
+        try:
+            with open(os.path.join(details[package]['proj_dir'], tar), 'wb') as w:
                 resp = request.urlopen(tar_remote)
-            except error.HTTPError: # The file doesn't exist, bail because we can't update
-                print('Version %s of %s does not exist on %s' % (latest_version, package, details[package]['url']))
-                continue
-            w.write(resp.read())
-        with open(os.path.join(details[package]['proj_dir'], asc), 'wb') as w:
-            resp = request.urlopen(asc_remote)
-            w.write(resp.read())
+                w.write(resp.read())
+        except error.HTTPError: # The file doesn't exist
+            # Build the distribution package on our own (this typically
+            # happens if the version hasn't been released yet).
+            os.chdir(os.path.join(clone_dir, 'lib', package))
+            Popen([which('make'), 'dist'], stdout=PIPE).wait()
+            os.remove(os.path.join(details[package]['proj_dir'], tar))
+            copyfile(os.path.join(os.getcwd(), tar), os.path.join(details[package]['proj_dir'], tar))
+            os.remove(os.path.join(os.getcwd(), tar))
+            os.chdir(cwd)
+        try:
+            with open(os.path.join(details[package]['proj_dir'], asc), 'wb') as w:
+                resp = request.urlopen(asc_remote)
+                w.write(resp.read())
+        except error.HTTPError: # The file doesn't exist
+            os.remove(os.path.join(details[package]['proj_dir'], asc))
         os.chdir(details[package]['proj_dir'])
         Popen([which('osc'), 'add', tar], stdout=PIPE).wait()
         Popen([which('osc'), 'rm', '%s-%s.tar.gz' % (package, details[package]['version'])], stdout=PIPE).wait()
-        Popen([which('osc'), 'add', asc], stdout=PIPE).wait()
+        if os.path.exists(asc):
+            Popen([which('osc'), 'add', asc], stdout=PIPE).wait()
         Popen([which('osc'), 'rm', '%s-%s.tar.asc' % (package, details[package]['version'])], stdout=PIPE).wait()
         os.chdir(cwd)
         print('Downloaded package sources')
@@ -233,21 +243,24 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
         Popen([which('gpg'), '--keyserver', 'keyserver.ubuntu.com', '--recv-keys', '4793916113084025'], stdout=PIPE, stderr=PIPE).wait()
 
         # Verify the sources
-        copyfile(os.path.join(details[package]['proj_dir'], tar), os.path.join(output_dir, tar))
-        copyfile(os.path.join(details[package]['proj_dir'], asc), os.path.join(output_dir, asc))
-        os.chdir(output_dir)
-        Popen([which('gunzip'), tar], stdout=PIPE).wait()
-        _, out = Popen([which('gpg'), '--verify', asc], stdout=PIPE, stderr=PIPE).communicate()
-        mt = b'Good signature from "Samba Library Distribution Key \<samba\-bugs@samba\.org\>"'
-        if len(re.findall(mt, out)) > 0:
-            print('Verified package sources')
+        if os.path.exists(os.path.join(details[package]['proj_dir'], asc)):
+            copyfile(os.path.join(details[package]['proj_dir'], tar), os.path.join(output_dir, tar))
+            copyfile(os.path.join(details[package]['proj_dir'], asc), os.path.join(output_dir, asc))
+            os.chdir(output_dir)
+            Popen([which('gunzip'), tar], stdout=PIPE).wait()
+            _, out = Popen([which('gpg'), '--verify', asc], stdout=PIPE, stderr=PIPE).communicate()
+            mt = b'Good signature from "Samba Library Distribution Key \<samba\-bugs@samba\.org\>"'
+            if len(re.findall(mt, out)) > 0:
+                print('Verified package sources')
+            else:
+                print(out)
+                cleanup(api_url, details[package])
+                return
+            os.remove(os.path.join(output_dir, '%s-%s.tar' % (package, latest_version)))
+            os.remove(os.path.join(output_dir, asc))
+            os.chdir(cwd)
         else:
-            print(out)
-            cleanup(api_url, details[package])
-            return
-        os.remove(os.path.join(output_dir, '%s-%s.tar' % (package, latest_version)))
-        os.remove(os.path.join(output_dir, asc))
-        os.chdir(cwd)
+            print('\033[31m' + 'WARNING: Failed to verify sources!\nMaybe we generated them?' + '\033[0m')
 
         # Update the spec file
         spec_files = glob(os.path.join(details[package]['proj_dir'], '*.spec'))
@@ -288,7 +301,7 @@ def fetch_package(user, email, api_url, project, packages, output_dir, samba_ver
                     print('Build succeeded. Submitting sources to the build service.')
 
         # Checkin the changes
-        Popen([which('osc'), 'ci']).wait()
+        Popen([which('osc'), 'ci', '--noservice']).wait()
         os.chdir(cwd)
 
         cleanup(api_url, details[package], updated=True)
